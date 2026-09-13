@@ -30,7 +30,7 @@ export class InlineExprView extends CfrRenderChild {
 
     protected onError(e: unknown): void {
         this.containerEl.empty();
-        this.containerEl.createSpan({ cls: "cfr-error-inline", text: `cfrjs: ${e instanceof Error ? e.message : e}` });
+        this.containerEl.createSpan({ cls: "cfr-error-inline", text: `cfrjs: ${e instanceof Error ? e.message : String(e)}` });
     }
 }
 

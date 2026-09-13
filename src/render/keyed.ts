@@ -16,9 +16,8 @@ export function createKeyedState(): KeyedState {
 }
 
 export function idle(cb: () => void): void {
-    const ric = (window as any).requestIdleCallback as ((cb: () => void, opts?: { timeout: number }) => number) | undefined;
-    if (ric) ric(cb, { timeout: 120 });
-    else setTimeout(cb, 16);
+    if (window.requestIdleCallback) window.requestIdleCallback(cb, { timeout: 120 });
+    else window.setTimeout(cb, 16);
 }
 
 /** Releases every row's components (when the structure changes). */
@@ -61,7 +60,7 @@ export function renderKeyed<T>(
     const generation = ++state.generation;
     const previous = state.rows;
     const next = new Map<string, HTMLElement[]>();
-    const elements: (HTMLElement | null)[] = new Array(items.length);
+    const elements = Array<HTMLElement | null>(items.length).fill(null);
 
     for (let i = 0; i < items.length; i++) {
         const pool = previous.get(keys[i]);

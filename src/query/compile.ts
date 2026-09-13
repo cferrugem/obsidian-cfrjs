@@ -6,13 +6,13 @@ import { compare, equals, LinkNormalizer } from "../values/compare";
 import { CDate } from "../values/date";
 import { CDuration } from "../values/duration";
 import { Link } from "../values/link";
-import { ROW_BASE, truthy, typeOf, valueToString } from "../values/types";
+import { createRow, isArray, isCallable, isRecord, ROW_BASE, Row, truthy, typeOf, valueToString } from "../values/types";
 import { BinOp, Expr } from "./ast";
 import { QueryError } from "./errors";
 
-export type Row = { [key: string]: any; [key: symbol]: any };
-export type Compiled = (row: Row) => any;
-export type FuncImpl = (ctx: EvalContext, ...args: any[]) => any;
+export type { Row };
+export type Compiled = (row: Row) => unknown;
+export type FuncImpl = (ctx: EvalContext, ...args: unknown[]) => unknown;
 
 export interface EvalContext {
     /** Row of the current page (`this`). */
@@ -25,7 +25,7 @@ export interface EvalContext {
     markDynamic(kind: "inlinks" | "starred"): void;
 }
 
-const EMPTY_ROW: Row = Object.freeze(Object.create(null));
+const EMPTY_ROW: Row = Object.freeze(createRow());
 
 export function compile(e: Expr, ctx: EvalContext): Compiled {
     switch (e.t) {
@@ -38,38 +38,38 @@ export function compile(e: Expr, ctx: EvalContext): Compiled {
             if (name === "this") return () => ctx.thisRow();
             if (name === "row") return r => r;
             return r => {
-                let v = r[name];
-                if (v === undefined) {
-                    for (let base = r[ROW_BASE]; base !== undefined && base !== null; base = base[ROW_BASE]) {
-                        v = base[name];
-                        if (v !== undefined) return v;
-                    }
-                    return null;
+                const v = r[name];
+                if (v !== undefined) return v;
+                let base = r[ROW_BASE];
+                while (isRecord(base)) {
+                    const inherited = base[name];
+                    if (inherited !== undefined) return inherited;
+                    base = base[ROW_BASE];
                 }
-                return v;
+                return null;
             };
         }
         case "not": {
             const inner = compile(e.e, ctx);
-            return fold(e, ctx, r => !truthy(inner(r)));
+            return fold(e, r => !truthy(inner(r)));
         }
         case "neg": {
             const inner = compile(e.e, ctx);
-            return fold(e, ctx, r => negate(inner(r)));
+            return fold(e, r => negate(inner(r)));
         }
         case "bin":
-            return fold(e, ctx, compileBinary(e.op, compile(e.l, ctx), compile(e.r, ctx), ctx));
+            return fold(e, compileBinary(e.op, compile(e.l, ctx), compile(e.r, ctx), ctx));
         case "list": {
             const items = e.items.map(i => compile(i, ctx));
-            return fold(e, ctx, r => {
-                const out = new Array(items.length);
+            return fold(e, r => {
+                const out = new Array<unknown>(items.length);
                 for (let i = 0; i < items.length; i++) out[i] = items[i](r);
                 return out;
             });
         }
         case "obj": {
             const entries = e.entries.map(([k, v]) => [k, compile(v, ctx)] as const);
-            return fold(e, ctx, r => {
+            return fold(e, r => {
                 const out: Row = {};
                 for (const [k, f] of entries) out[k] = f(r);
                 return out;
@@ -83,9 +83,8 @@ export function compile(e: Expr, ctx: EvalContext): Compiled {
             const body = compile(e.body, ctx);
             const params = e.params;
             return r => {
-                const base = r ?? EMPTY_ROW;
-                return (...args: any[]) => {
-                    const scope: Row = { [ROW_BASE]: base };
+                return (...args: unknown[]) => {
+                    const scope: Row = { [ROW_BASE]: r };
                     for (let i = 0; i < params.length; i++) scope[params[i]] = args[i] ?? null;
                     return body(scope);
                 };
@@ -95,7 +94,7 @@ export function compile(e: Expr, ctx: EvalContext): Compiled {
 }
 
 /** Constant folding: if every child is a literal, evaluate once. */
-function fold(e: Expr, _ctx: EvalContext, fn: Compiled): Compiled {
+function fold(e: Expr, fn: Compiled): Compiled {
     if (!isConstant(e)) return fn;
     try {
         const v = fn(EMPTY_ROW);
@@ -135,21 +134,20 @@ function compileIndex(objExpr: Expr, keyExpr: Expr, ctx: EvalContext): Compiled 
     return r => {
         const k = keyFn(r);
         if (k === null || k === undefined) return null;
-        if (typeof k !== "string" && typeof k !== "number")
-            throw new QueryError("Can only index with a string or a number");
+        if (typeof k !== "string" && typeof k !== "number") throw new QueryError("Can only index with a string or a number");
         return getField(obj(r), k, ctx);
     };
 }
 
-const objectProto = Object.prototype as Record<string, unknown>;
+const objectProto = Object.prototype as unknown as Record<string, unknown>;
 
 /** Field access with language semantics (links resolve to pages, lists map, etc.). */
-export function getField(o: any, key: string | number, ctx: EvalContext): any {
+export function getField(o: unknown, key: string | number, ctx: EvalContext): unknown {
     if (o === null || o === undefined) return null;
     if (typeof o === "object") {
-        if (Array.isArray(o)) {
+        if (isArray(o)) {
             if (typeof key === "number") return key >= 0 && key < o.length ? o[key] ?? null : null;
-            const out = new Array(o.length);
+            const out = new Array<unknown>(o.length);
             for (let i = 0; i < o.length; i++) out[i] = getField(o[i], key, ctx);
             return out;
         }
@@ -161,19 +159,20 @@ export function getField(o: any, key: string | number, ctx: EvalContext): any {
         }
         if (o instanceof CDate) return dateField(o, String(key));
         if (o instanceof CDuration) return o.as(String(key));
-        const v = o[key];
+        const record = o as Row;
+        const v = record[key];
         if (v === undefined) {
-            const base = o[ROW_BASE];
-            return base !== undefined && base !== null ? getField(base, key, ctx) : null;
+            const base = record[ROW_BASE];
+            return isRecord(base) ? getField(base, key, ctx) : null;
         }
-        if (typeof v === "function" && v === objectProto[key as string]) return null;
+        if (typeof v === "function" && v === objectProto[key]) return null;
         return v;
     }
     if (typeof o === "string" && typeof key === "number") return key >= 0 && key < o.length ? o[key] : null;
     return null;
 }
 
-function dateField(d: CDate, key: string): any {
+function dateField(d: CDate, key: string): number | null {
     switch (key) {
         case "year":
             return d.year;
@@ -206,7 +205,7 @@ function compileCall(fnExpr: Expr, argExprs: Expr[], ctx: EvalContext): Compiled
     const args = argExprs.map(a => compile(a, ctx));
 
     if (fnExpr.t === "var") {
-        const impl = ctx.functions[fnExpr.name] ?? ctx.functions[fnExpr.name.toLowerCase()];
+        const impl: FuncImpl | undefined = ctx.functions[fnExpr.name] ?? ctx.functions[fnExpr.name.toLowerCase()];
         if (impl) {
             switch (args.length) {
                 case 0:
@@ -233,7 +232,7 @@ function compileCall(fnExpr: Expr, argExprs: Expr[], ctx: EvalContext): Compiled
     const name = fnExpr.t === "var" ? fnExpr.name : "expression";
     return r => {
         const f = fn(r);
-        if (typeof f !== "function") {
+        if (!isCallable(f)) {
             if (f === null && fnExpr.t === "var") throw new QueryError(`Unknown function '${name}'`);
             throw new QueryError(`Cannot call a value of type ${typeOf(f)} as a function`);
         }
@@ -299,14 +298,14 @@ function typeError(op: string, a: unknown, b: unknown): QueryError {
     return new QueryError(`Operation '${op}' is not supported between ${typeOf(a)} and ${typeOf(b)}`);
 }
 
-export function negate(v: any): any {
+export function negate(v: unknown): unknown {
     if (v === null || v === undefined) return null;
     if (typeof v === "number") return -v;
     if (v instanceof CDuration) return v.negate();
     throw new QueryError(`Cannot negate a value of type ${typeOf(v)}`);
 }
 
-export function add(a: any, b: any): any {
+export function add(a: unknown, b: unknown): unknown {
     if (typeof a === "number" && typeof b === "number") return a + b;
     if (typeof a === "string" || typeof b === "string") {
         if (a === null || a === undefined) return b;
@@ -317,12 +316,12 @@ export function add(a: any, b: any): any {
     if (a instanceof CDate && b instanceof CDuration) return a.plus(b);
     if (a instanceof CDuration && b instanceof CDate) return b.plus(a);
     if (a instanceof CDuration && b instanceof CDuration) return a.plus(b);
-    if (Array.isArray(a) && Array.isArray(b)) return a.concat(b);
-    if (typeOf(a) === "object" && typeOf(b) === "object") return Object.assign({}, a, b);
+    if (isArray(a) && isArray(b)) return a.concat(b);
+    if (isRecord(a) && isRecord(b) && typeOf(a) === "object" && typeOf(b) === "object") return Object.assign({}, a, b);
     throw typeError("+", a, b);
 }
 
-export function subtract(a: any, b: any): any {
+export function subtract(a: unknown, b: unknown): unknown {
     if (typeof a === "number" && typeof b === "number") return a - b;
     if (a === null || a === undefined || b === null || b === undefined) return null;
     if (a instanceof CDate && b instanceof CDate) return a.diff(b);
@@ -331,7 +330,7 @@ export function subtract(a: any, b: any): any {
     throw typeError("-", a, b);
 }
 
-export function multiply(a: any, b: any): any {
+export function multiply(a: unknown, b: unknown): unknown {
     if (typeof a === "number" && typeof b === "number") return a * b;
     if (a === null || a === undefined || b === null || b === undefined) return null;
     if (a instanceof CDuration && typeof b === "number") return a.times(b);
@@ -340,7 +339,7 @@ export function multiply(a: any, b: any): any {
     throw typeError("*", a, b);
 }
 
-export function divide(a: any, b: any): any {
+export function divide(a: unknown, b: unknown): unknown {
     if (a === null || a === undefined || b === null || b === undefined) return null;
     if (typeof a === "number" && typeof b === "number") {
         if (b === 0) throw new QueryError("Division by zero");

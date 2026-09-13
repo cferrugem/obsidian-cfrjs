@@ -5,7 +5,7 @@
  *
  * The inline field rules (wrapped `[key:: value]` / `(key:: value)` fields, full-line fields and the
  * task emoji shorthands) are adapted from Dataview (https://github.com/blacksmithgu/obsidian-dataview),
- * Copyright (c) 2021 Michael Brenan, released under the MIT License. See LICENSE.
+ * Copyright (c) 2021 Michael Brenan, released under the MIT License. See THIRD_PARTY_NOTICES.md.
  */
 
 export interface ParseMeta {
@@ -36,11 +36,11 @@ export interface ContentData {
     lists: RawListItem[];
 }
 
-export const EMPTY_CONTENT: ContentData = Object.freeze({ fields: [], lists: [] }) as ContentData;
+export const EMPTY_CONTENT: ContentData = Object.freeze({ fields: [], lists: [] });
 
 const LIST_ITEM_RE = /^[\s>]*(\d+\.|\d+\)|\*|-|\+)\s*(\[.?\])?\s*(.*)$/u;
 const SKIP_SECTIONS = new Set(["list", "code", "yaml", "math", "thematicBreak", "html", "comment"]);
-const TAG_RE = /(?:^|[\s,;:!?"'(\[{])#([\p{L}\p{N}_\-/\p{Extended_Pictographic}]+)/gu;
+const TAG_RE = /(?:^|[\s,;:!?"'([{])#([\p{L}\p{N}_\-/\p{Extended_Pictographic}]+)/gu;
 const HAS_EMOJI_HINT = /[✅➕⏳⌛]|\uD83D[\uDCC5\uDCC6\uDDD3\uDEEB]/;
 
 export function parseContent(content: string, meta: ParseMeta): ContentData {

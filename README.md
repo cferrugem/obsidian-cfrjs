@@ -1,4 +1,4 @@
-# CFR JS
+# CFR Js
 
 An Obsidian plugin inspired by [Dataview](https://github.com/blacksmithgu/obsidian-dataview), written from scratch with a focus on **performance**: `TABLE` / `LIST` / `TASK` queries, a JavaScript API, inline queries, inline fields, task toggling from views, and CSV sources.
 
@@ -119,7 +119,7 @@ Other plugins can use `window.CfrJsAPI` (`pages`, `page`, `query`, `stats`).
 
 ## Security
 
-`cfrjs` code blocks and inline `$=` expressions run **JavaScript written in your notes** with the same permissions as Obsidian itself (they can read and modify files in your vault). Only open vaults and notes you trust. You can turn JavaScript off under *Settings → CFR JS → Enable JavaScript* and *Enable inline JavaScript*; `cfr` queries and inline `=` expressions never execute arbitrary code.
+`cfrjs` code blocks and inline `$=` expressions run **JavaScript written in your notes** with the same permissions as Obsidian itself (they can read and modify files in your vault). Only open vaults and notes you trust. You can turn JavaScript off under *Settings → CFR Js → Enable JavaScript* and *Enable inline JavaScript*; `cfr` queries and inline `=` expressions never execute arbitrary code.
 
 ## Mobile
 
@@ -129,7 +129,7 @@ The plugin does not use Node.js or Electron APIs and falls back to the main thre
 
 cfrjs is released under the [MIT License](LICENSE).
 
-Its query language, API names and field names follow Dataview's conventions so existing queries keep working. The inline field parsing rules in `src/index/parse-content.ts` are adapted from [Dataview](https://github.com/blacksmithgu/obsidian-dataview) (Copyright (c) 2021 Michael Brenan, MIT License); the full notice is included in [LICENSE](LICENSE).
+Its query language, API names and field names follow Dataview's conventions so existing queries keep working. The inline field parsing rules in `src/index/parse-content.ts` are adapted from [Dataview](https://github.com/blacksmithgu/obsidian-dataview) (Copyright (c) 2021 Michael Brenan, MIT License); the full notice is included in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Releasing
 

@@ -5,7 +5,7 @@
 import { App, Component, TFile } from "obsidian";
 import type CfrPlugin from "../main";
 import { Row } from "../index/page";
-import { EvalContext, FuncImpl } from "../query/compile";
+import { EvalContext } from "../query/compile";
 import { DepSet } from "../query/deps";
 import { getParsedQuery, PreparedExpression, PreparedQuery, QueryResult, resolveSourcePaths } from "../query/execute";
 import { FUNCTIONS } from "../query/functions";
@@ -18,6 +18,7 @@ import { compare, equals } from "../values/compare";
 import { CDate, parseDateKeyword, parseISODate } from "../values/date";
 import { CDuration, parseDuration } from "../values/duration";
 import { Link } from "../values/link";
+import { isRecord } from "../values/types";
 import { DataArray } from "./data-array";
 
 const sourceCache = new Map<string, Source>();
@@ -39,7 +40,7 @@ export class InlineApi {
         load: (path: string, originFile?: string) => Promise<string | undefined>;
         normalize: (path: string, originFile?: string) => string;
     };
-    private _func?: Record<string, (...args: any[]) => any>;
+    private _func?: Record<string, (...args: unknown[]) => unknown>;
 
     constructor(
         readonly plugin: CfrPlugin,
@@ -126,7 +127,7 @@ export class InlineApi {
     }
 
     /** Evaluates a query language expression. */
-    evaluate(expression: string, row: Row = {}): any {
+    evaluate(expression: string, row: Row = {}): unknown {
         return new PreparedExpression(parseExpression(expression), this.plugin.index, this.currentFilePath).run(this.deps, row);
     }
 
@@ -162,8 +163,9 @@ export class InlineApi {
         if (groupByFile) {
             const map = new Map<string, { key: unknown; rows: Row[] }>();
             for (const t of rows) {
-                let g = map.get(t.path);
-                if (!g) map.set(t.path, (g = { key: Link.file(t.path), rows: [] }));
+                const path = typeof t.path === "string" ? t.path : "";
+                let g = map.get(path);
+                if (!g) map.set(path, (g = { key: Link.file(path), rows: [] }));
                 g.rows.push(t);
             }
             groups = [...map.values()];
@@ -199,19 +201,17 @@ export class InlineApi {
         return this.el(tag, content, options);
     }
 
-    /** Loads `path.js` or `path/view.js` (+ view.css) and runs it with `input`. */
+    /**
+     * Loads `path.js` or `path/view.js` and runs it with `input`.
+     * CSS files are not injected; style views through a CSS snippet instead.
+     */
     async view(path: string, input?: unknown): Promise<void> {
         const index = this.plugin.index;
         const clean = path.replace(/^\/+/, "").replace(/\.js$/, "");
-        const simple = index.resolveFile(clean + ".js", this.currentFilePath);
-        const folderScript = simple ? null : index.resolveFile(clean + "/view.js", this.currentFilePath);
-        const script = simple ?? folderScript;
+        const script =
+            index.resolveFile(clean + ".js", this.currentFilePath) ?? index.resolveFile(clean + "/view.js", this.currentFilePath);
         if (!script) throw new Error(`cfr.view: no script found for "${path}"`);
 
-        if (folderScript) {
-            const css = index.resolveFile(clean + "/view.css", this.currentFilePath);
-            if (css) this.container.createEl("style", { text: await this.plugin.app.vault.cachedRead(css) });
-        }
         const source = await this.plugin.app.vault.cachedRead(script);
         const { compileScript } = await import("../views/js-view");
         await compileScript(source).call(this, this, this, input);
@@ -233,7 +233,11 @@ export class InlineApi {
         if (value instanceof Date) return CDate.fromJSDate(value);
         if (typeof value === "number") return new CDate(value, true);
         if (typeof value === "string") return parseDateKeyword(value) ?? parseISODate(value);
-        if (value instanceof Link) return this.page(value)?.file?.day ?? null;
+        if (value instanceof Link) {
+            const file = this.page(value)?.file;
+            const day = isRecord(file) ? file.day : null;
+            return day instanceof CDate ? day : null;
+        }
         return null;
     }
 
@@ -262,7 +266,7 @@ export class InlineApi {
     }
 
     /** Query language functions: `cfr.func.dateformat(d, "yyyy")`. */
-    get func(): Record<string, (...args: any[]) => any> {
+    get func(): Record<string, (...args: unknown[]) => unknown> {
         if (this._func) return this._func;
         const index = this.plugin.index;
         const origin = this.currentFilePath;
@@ -273,8 +277,8 @@ export class InlineApi {
             functions: FUNCTIONS,
             markDynamic: () => {},
         };
-        const out: Record<string, (...args: any[]) => any> = {};
-        for (const [name, fn] of Object.entries(FUNCTIONS) as [string, FuncImpl][]) out[name] = (...args) => fn(ctx, ...args);
+        const out: Record<string, (...args: unknown[]) => unknown> = {};
+        for (const [name, fn] of Object.entries(FUNCTIONS)) out[name] = (...args) => fn(ctx, ...args);
         return (this._func = out);
     }
 }

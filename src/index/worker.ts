@@ -21,6 +21,6 @@ export function handleRequest(msg: WorkerRequest): WorkerResponse {
 
 declare const self: { onmessage: ((e: MessageEvent) => void) | null; postMessage(msg: unknown): void } | undefined;
 
-if (typeof self !== "undefined" && typeof (globalThis as any).document === "undefined") {
+if (typeof self !== "undefined" && typeof document === "undefined") {
     self.onmessage = (e: MessageEvent) => self.postMessage(handleRequest(e.data as WorkerRequest));
 }

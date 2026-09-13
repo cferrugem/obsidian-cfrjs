@@ -7,7 +7,7 @@ import { CfrSettings } from "../settings";
 import { CDate } from "../values/date";
 import { CDuration } from "../values/duration";
 import { Link } from "../values/link";
-import { formatDate, hasCustomToString, isWidget } from "../values/types";
+import { customToString, formatDate, isWidget } from "../values/types";
 
 export interface RenderContext {
     app: App;
@@ -138,10 +138,11 @@ export function renderValue(parent: HTMLElement, value: unknown, rc: RenderConte
     }
 
     const obj = value as Record<string, unknown>;
-    if (hasCustomToString(obj)) {
-        const link = (obj as any).link;
+    const custom = customToString(obj);
+    if (custom !== null) {
+        const link = obj.link;
         if (link instanceof Link) renderLink(parent, link, rc);
-        else parent.appendText(String(obj));
+        else parent.appendText(custom);
         return;
     }
 

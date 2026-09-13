@@ -387,7 +387,7 @@ export function extractDate(text: string): CDate | null {
 /** Parses with an explicit format (tokens yyyy, MM, dd, HH, mm, ss). */
 export function parseDateWithFormat(text: string, fmt: string): CDate | null {
     const order: string[] = [];
-    const pattern = fmt.replace(/'([^']*)'|yyyy|MM|M|dd|d|HH|H|mm|m|ss|s|[.*+?^${}()|[\]\\]/g, (tok, literal) => {
+    const pattern = fmt.replace(/'([^']*)'|yyyy|MM|M|dd|d|HH|H|mm|m|ss|s|[.*+?^${}()|[\]\\]/g, (tok: string, literal: string | undefined): string => {
         if (literal !== undefined) return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         if (tok.length === 1 && /[.*+?^${}()|[\]\\]/.test(tok)) return "\\" + tok;
         order.push(tok[0]);

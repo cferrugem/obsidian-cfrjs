@@ -3,7 +3,7 @@
  * length and iteration have native cost.
  */
 import { compare } from "../values/compare";
-import { valueKey, valueToString } from "../values/types";
+import { isArray, isRecord, valueKey, valueToString } from "../values/types";
 
 type Pred<T> = (value: T, index: number, array: T[]) => unknown;
 type KeyFn<T, U> = (value: T) => U;
@@ -13,19 +13,46 @@ export interface Grouping<K, T> {
     rows: DataArray<T>;
 }
 
-export class DataArray<T = any> extends Array<T> {
-    [prop: string]: any;
+export class DataArray<T = unknown> extends Array<T> {
+    // "Swizzled" fields, defined as prototype getters below: `pages.file.name`, `page.file.tasks.text`...
+    declare readonly file: DataArray;
+    declare readonly name: DataArray;
+    declare readonly path: DataArray;
+    declare readonly link: DataArray;
+    declare readonly folder: DataArray;
+    declare readonly tasks: DataArray;
+    declare readonly lists: DataArray;
+    declare readonly tags: DataArray;
+    declare readonly etags: DataArray;
+    declare readonly outlinks: DataArray;
+    declare readonly inlinks: DataArray;
+    declare readonly aliases: DataArray;
+    declare readonly text: DataArray;
+    declare readonly status: DataArray;
+    declare readonly checked: DataArray;
+    declare readonly completed: DataArray;
+    declare readonly fullyCompleted: DataArray;
+    declare readonly children: DataArray;
+    declare readonly rows: DataArray;
+    declare readonly key: DataArray;
+    declare readonly ctime: DataArray;
+    declare readonly mtime: DataArray;
+    declare readonly day: DataArray;
+    declare readonly size: DataArray;
+    declare readonly frontmatter: DataArray;
+    declare readonly section: DataArray;
+    declare readonly due: DataArray;
 
     /** Wraps an iterable; returns the same instance if it already is a DataArray. */
     static wrap<T>(values: Iterable<T> | ArrayLike<T> | null | undefined): DataArray<T> {
-        if (values instanceof DataArray) return values;
+        if (values instanceof DataArray) return values as DataArray<T>;
         const out = new DataArray<T>();
         if (values === null || values === undefined) return out;
         if (Array.isArray(values)) {
-            for (let i = 0; i < values.length; i++) out.push(values[i]);
+            for (const v of values as T[]) out.push(v);
             return out;
         }
-        for (const v of values as Iterable<T>) out.push(v);
+        for (const v of Array.from(values)) out.push(v);
         return out;
     }
 
@@ -49,7 +76,9 @@ export class DataArray<T = any> extends Array<T> {
     }
 
     limit(count: number): DataArray<T> {
-        return DataArray.wrap(Array.prototype.slice.call(this, 0, count) as T[]);
+        const out = new DataArray<T>();
+        for (let i = 0; i < Math.min(count, this.length); i++) out.push(this[i]);
+        return out;
     }
 
     first(): T | undefined {
@@ -73,14 +102,19 @@ export class DataArray<T = any> extends Array<T> {
     // @ts-ignore
     sort(compareFn: (a: T, b: T) => number): this;
     // @ts-ignore
-    sort(key?: any, direction?: "asc" | "desc", comparator?: (a: any, b: any) => number): DataArray<T> {
+    sort(
+        key?: ((value: T) => unknown) | ((a: T, b: T) => number),
+        direction?: "asc" | "desc",
+        comparator?: (a: unknown, b: unknown) => number
+    ): DataArray<T> {
         if (typeof key === "function" && key.length >= 2 && direction === undefined) {
-            return super.sort(key) as DataArray<T>;
+            super.sort(key as (a: T, b: T) => number);
+            return this;
         }
-        const keyFn: KeyFn<T, unknown> = typeof key === "function" ? key : (v: T) => v;
+        const keyFn = typeof key === "function" ? (key as (value: T) => unknown) : (v: T): unknown => v;
         const cmp = comparator ?? ((a: unknown, b: unknown) => compare(a, b));
         const sign = direction === "desc" ? -1 : 1;
-        const keys = new Array(this.length);
+        const keys = new Array<unknown>(this.length);
         const idx = new Array<number>(this.length);
         for (let i = 0; i < this.length; i++) {
             keys[i] = keyFn(this[i]);
@@ -113,7 +147,7 @@ export class DataArray<T = any> extends Array<T> {
         const seen = new Set<string>();
         const out = new DataArray<T>();
         for (let i = 0; i < this.length; i++) {
-            const hash = valueKey(key ? key(this[i]) : this[i]);
+            const hash = key ? valueKey(key(this[i])) : valueKey(this[i]);
             if (!seen.has(hash)) {
                 seen.add(hash);
                 out.push(this[i]);
@@ -123,48 +157,48 @@ export class DataArray<T = any> extends Array<T> {
     }
 
     /** Extracts a field from every element, flattening lists (like `pages.file.name` in Dataview). */
-    to(field: string): DataArray<any> {
-        const out = new DataArray<any>();
+    to(field: string): DataArray {
+        const out = new DataArray();
         for (let i = 0; i < this.length; i++) {
-            const el: any = this[i];
-            if (el === null || el === undefined) continue;
+            const el: unknown = this[i];
+            if (!isRecord(el)) continue;
             const v = el[field];
             if (v === undefined) continue;
-            if (Array.isArray(v)) for (const x of v) out.push(x);
+            if (isArray(v)) for (const x of v) out.push(x);
             else out.push(v);
         }
         return out;
     }
 
     /** Like `to`, without flattening. */
-    into(field: string): DataArray<any> {
-        const out = new DataArray<any>();
+    into(field: string): DataArray {
+        const out = new DataArray();
         for (let i = 0; i < this.length; i++) {
-            const el: any = this[i];
-            if (el !== null && el !== undefined && el[field] !== undefined) out.push(el[field]);
+            const el: unknown = this[i];
+            if (isRecord(el) && el[field] !== undefined) out.push(el[field]);
         }
         return out;
     }
 
     /** Dotted path: `pluck("file.name")`. */
-    pluck(path: string): DataArray<any> {
-        let cur: DataArray<any> = this;
+    pluck(path: string): DataArray {
+        let cur: DataArray = DataArray.wrap<unknown>(Array.from(this));
         for (const part of path.split(".")) cur = cur.to(part);
         return cur;
     }
 
     /** Recursively flattens a tree (e.g. tasks and subtasks through "children"). */
-    expand(field: string): DataArray<any> {
-        const out = new DataArray<any>();
-        const stack: any[] = Array.from(this).reverse();
-        const seen = new Set<any>();
+    expand(field: string): DataArray {
+        const out = new DataArray();
+        const stack: unknown[] = Array.from<unknown>(this).reverse();
+        const seen = new Set<unknown>();
         while (stack.length) {
             const el = stack.pop();
-            if (el === null || el === undefined || seen.has(el)) continue;
+            if (!isRecord(el) || seen.has(el)) continue;
             seen.add(el);
             out.push(el);
             const children = el[field];
-            if (Array.isArray(children)) for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]);
+            if (isArray(children)) for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]);
         }
         return out;
     }
@@ -172,7 +206,7 @@ export class DataArray<T = any> extends Array<T> {
     sum(): number {
         let acc = 0;
         for (let i = 0; i < this.length; i++) {
-            const v: any = this[i];
+            const v: unknown = this[i];
             if (typeof v === "number") acc += v;
         }
         return acc;
@@ -182,7 +216,7 @@ export class DataArray<T = any> extends Array<T> {
         let acc = 0;
         let n = 0;
         for (let i = 0; i < this.length; i++) {
-            const v: any = this[i];
+            const v: unknown = this[i];
             if (typeof v === "number") {
                 acc += v;
                 n++;
@@ -217,13 +251,12 @@ export class DataArray<T = any> extends Array<T> {
 
 // `.values` returns the raw array (Dataview compatibility). Iteration uses Symbol.iterator, so it is unaffected.
 Object.defineProperty(DataArray.prototype, "values", {
-    get(this: DataArray) {
+    get(this: DataArray): unknown[] {
         return Array.from(this);
     },
     configurable: true,
 });
 
-// "Swizzled" access to the most common fields: pages.file.name, page.file.tasks.text, groups.key...
 const SWIZZLED = [
     "file",
     "name",
@@ -255,7 +288,7 @@ const SWIZZLED = [
 ];
 for (const field of SWIZZLED) {
     Object.defineProperty(DataArray.prototype, field, {
-        get(this: DataArray) {
+        get(this: DataArray): DataArray {
             return this.to(field);
         },
         configurable: true,

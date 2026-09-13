@@ -127,14 +127,15 @@ export function parseFrontmatterValue(value: unknown, depth = 0): Literal {
     }
     if (depth > 20) return null;
     if (Array.isArray(value)) {
-        const out: Literal[] = new Array(value.length);
-        for (let i = 0; i < value.length; i++) out[i] = parseFrontmatterValue(value[i], depth + 1);
+        const out: Literal[] = [];
+        for (const item of value) out.push(parseFrontmatterValue(item, depth + 1));
         return out;
     }
     if (value instanceof Date) return null;
     const out: Record<string, Literal> = {};
-    for (const key in value as Record<string, unknown>) {
-        out[key] = parseFrontmatterValue((value as any)[key], depth + 1);
+    const record = value as Record<string, unknown>;
+    for (const key in record) {
+        out[key] = parseFrontmatterValue(record[key], depth + 1);
     }
     return out;
 }

@@ -17,3 +17,9 @@ export function describePosition(source: string, pos: number): string {
     }
     return `line ${line}, column ${col}`;
 }
+
+/** Message of an unknown thrown value. */
+export function errorMessage(e: unknown): string {
+    if (e instanceof Error) return e.message;
+    return typeof e === "string" ? e : JSON.stringify(e) ?? "Unknown error";
+}

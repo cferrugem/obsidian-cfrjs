@@ -1,5 +1,5 @@
 /** View base class: scheduler registration, visibility tracking and refresh coalescing. */
-import { Component, MarkdownRenderChild } from "obsidian";
+import { MarkdownRenderChild } from "obsidian";
 import type CfrPlugin from "../main";
 import { DepSet } from "../query/deps";
 import { renderError, RenderContext } from "../render/value";
@@ -18,14 +18,11 @@ export abstract class CfrRenderChild extends MarkdownRenderChild implements Refr
     }
 
     protected get rc(): RenderContext {
-        const self = this;
         return {
             app: this.plugin.app,
             settings: this.plugin.settings,
             sourcePath: this.sourcePath,
-            get component(): Component {
-                return self;
-            },
+            component: this,
         };
     }
 
@@ -38,7 +35,7 @@ export abstract class CfrRenderChild extends MarkdownRenderChild implements Refr
     onunload(): void {
         this.plugin.scheduler.unregister(this);
         this.plugin.scheduler.unobserve(this.containerEl);
-        if (this.frame) cancelAnimationFrame(this.frame);
+        if (this.frame) window.cancelAnimationFrame(this.frame);
         this.frame = 0;
     }
 
@@ -54,7 +51,7 @@ export abstract class CfrRenderChild extends MarkdownRenderChild implements Refr
 
     private queue(): void {
         if (this.frame) return;
-        this.frame = requestAnimationFrame(() => {
+        this.frame = window.requestAnimationFrame(() => {
             this.frame = 0;
             void this.refresh();
         });

@@ -81,14 +81,16 @@ export function compare(a: unknown, b: unknown, normalize?: LinkNormalizer, dept
         case "object":
         case "widget": {
             if (depth > 16) return 0;
-            const ka = Object.keys(a as object);
-            const kb = Object.keys(b as object);
+            const ra = a as Record<string, unknown>;
+            const rb = b as Record<string, unknown>;
+            const ka = Object.keys(ra);
+            const kb = Object.keys(rb);
             if (ka.length !== kb.length) return ka.length - kb.length;
             ka.sort();
             kb.sort();
             for (let i = 0; i < ka.length; i++) {
                 if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
-                const c = compare((a as any)[ka[i]], (b as any)[kb[i]], normalize, depth + 1);
+                const c = compare(ra[ka[i]], rb[kb[i]], normalize, depth + 1);
                 if (c !== 0) return c;
             }
             return 0;

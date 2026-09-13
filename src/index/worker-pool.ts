@@ -51,10 +51,10 @@ export class WorkerPool {
     run<K extends WorkerRequest["kind"]>(
         msg: K extends "parse" ? Omit<Extract<WorkerRequest, { kind: "parse" }>, "id"> : Omit<Extract<WorkerRequest, { kind: "csv" }>, "id">
     ): Promise<WorkerResponse> {
-        const full = { ...msg, id: this.nextId++ } as WorkerRequest;
+        const full = { ...msg, id: this.nextId++ };
         if (this.slots.length === 0) {
             // Yield before processing so the UI does not freeze.
-            return new Promise(resolve => setTimeout(() => resolve(this.fallback(full)), 0));
+            return new Promise(resolve => window.setTimeout(() => resolve(this.fallback(full)), 0));
         }
         return new Promise((resolve, reject) => {
             this.queue.push({ msg: full, resolve, reject });

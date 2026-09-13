@@ -1,4 +1,4 @@
-import { MarkdownPostProcessorContext, Notice, Plugin } from "obsidian";
+import { MarkdownPostProcessorContext, moment, Notice, Plugin } from "obsidian";
 import { CfrApi } from "./api/plugin-api";
 import { VaultIndex } from "./index/vault-index";
 import { isCommunityPluginEnabled } from "./obsidian-internals";
@@ -13,6 +13,19 @@ import { inlineLivePreview } from "./views/lp-inline";
 import { QueryView } from "./views/query-view";
 import { Scheduler } from "./views/scheduler";
 
+/** Legacy CodeMirror 5 mode registry, still used by Obsidian for code block highlighting. */
+interface CodeMirrorModes {
+    defineMode(name: string, factory: (config: unknown) => unknown): void;
+    getMode(config: unknown, mode: string): unknown;
+}
+
+declare global {
+    interface Window {
+        CfrJsAPI?: CfrApi;
+        CodeMirror?: CodeMirrorModes;
+    }
+}
+
 /** Ensures keywords are valid and distinct (old or hand-edited settings). */
 function sanitizeKeywords(settings: CfrSettings): void {
     if (!KEYWORD_RE.test(settings.queryKeyword)) settings.queryKeyword = DEFAULT_SETTINGS.queryKeyword;
@@ -25,7 +38,7 @@ function sanitizeKeywords(settings: CfrSettings): void {
     } else if (query === js + "js") {
         // Swapped (e.g. queries = "dataviewjs", JavaScript = "dataview"): undo the swap.
         [settings.queryKeyword, settings.jsKeyword] = [settings.jsKeyword, settings.queryKeyword];
-        new Notice("cfrjs: the query and JavaScript keywords were swapped and have been fixed.");
+        new Notice("The query and JavaScript keywords were swapped and have been fixed.");
     }
 }
 
@@ -36,13 +49,14 @@ export default class CfrPlugin extends Plugin {
     api!: CfrApi;
 
     async onload(): Promise<void> {
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        const saved = (await this.loadData()) as Partial<CfrSettings> | null;
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
         sanitizeKeywords(this.settings);
         this.applyDisplaySettings();
         // Register the tab first: even if something below fails, settings stay reachable.
         this.addSettingTab(new CfrSettingTab(this.app, this));
 
-        const locale = (window as any).moment?.locale?.();
+        const locale = moment.locale();
         if (locale) {
             setLocale(locale);
             setCollatorLocale(locale);
@@ -54,8 +68,8 @@ export default class CfrPlugin extends Plugin {
         this.register(() => this.scheduler.destroy());
 
         this.api = new CfrApi(this);
-        (window as any).CfrJsAPI = this.api;
-        this.register(() => delete (window as any).CfrJsAPI);
+        window.CfrJsAPI = this.api;
+        this.register(() => delete window.CfrJsAPI);
 
         const queryBlock = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) =>
             ctx.addChild(new QueryView(this, el, source, ctx.sourcePath));
@@ -82,9 +96,9 @@ export default class CfrPlugin extends Plugin {
             id: "rebuild-index",
             name: "Rebuild index (discard cache)",
             callback: async () => {
-                new Notice("cfrjs: rebuilding the index…");
+                new Notice("Rebuilding the index…");
                 await this.index.rebuild();
-                new Notice("cfrjs: index rebuilt.");
+                new Notice("Index rebuilt.");
             },
         });
         this.addCommand({
@@ -121,8 +135,8 @@ export default class CfrPlugin extends Plugin {
     }
 
     private registerJsHighlighting(keyword: string): void {
-        const cm = (window as any).CodeMirror;
-        if (!cm?.defineMode) return;
+        const cm = window.CodeMirror;
+        if (!cm) return;
         cm.defineMode(keyword, (config: unknown) => cm.getMode(config, "javascript"));
         this.register(() => cm.defineMode(keyword, (config: unknown) => cm.getMode(config, "null")));
     }

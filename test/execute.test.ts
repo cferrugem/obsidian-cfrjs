@@ -43,7 +43,7 @@ describe("execution", () => {
 
     it("uses inline fields and list item fields", async () => {
         const r = (await run('LIST WHERE rating = 5 AND kind = "note"')) as ListResult;
-        expect(r.items.map((l: Link) => l.path)).toEqual(["projects/A.md"]);
+        expect(r.items.map(l => (l as Link).path)).toEqual(["projects/A.md"]);
     });
 
     it("groups and names the group column", async () => {
@@ -71,7 +71,7 @@ describe("execution", () => {
         expect(r.count).toBe(2);
         const texts = r.groups[0].rows.map(t => t.text);
         expect(texts).toContain("task one [due:: 2024-01-05]");
-        expect(r.groups[0].rows[0].due.day).toBe(5);
+        expect((r.groups[0].rows[0].due as { day: number }).day).toBe(5);
         const parent = makeIndex().pages.get("projects/A.md")!.tasks.find(t => t.text === "task two")!;
         expect(parent.fullyCompleted).toBe(false);
         expect(parent.children.length).toBe(1);
@@ -79,9 +79,9 @@ describe("execution", () => {
 
     it("supports incoming links and negation", async () => {
         const incoming = (await run("LIST FROM [[A]]")) as ListResult;
-        expect(incoming.items.map((l: Link) => l.path)).toEqual(["projects/B.md"]);
+        expect(incoming.items.map(l => (l as Link).path)).toEqual(["projects/B.md"]);
         const negated = (await run("LIST FROM -#project")) as ListResult;
-        expect(negated.items.map((l: Link) => l.path)).toEqual(["notes/C.md"]);
+        expect(negated.items.map(l => (l as Link).path)).toEqual(["notes/C.md"]);
     });
 
     it("resolves this and links inside expressions", async () => {
@@ -108,7 +108,7 @@ describe("execution", () => {
 });
 
 describe("dependencies", () => {
-    const batch = (changes: ChangeBatch["changes"]): ChangeBatch => ({ revision: 1, global: false, starred: false, changes });
+    const batch = (changes: ChangeBatch["changes"]): ChangeBatch => ({ revision: 1, allPages: false, starred: false, changes });
 
     it("records tag, folder and this dependencies", async () => {
         const deps = new DepSet();

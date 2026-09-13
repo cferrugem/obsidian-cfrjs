@@ -1,6 +1,14 @@
+# Third-party notices
+
+## Dataview
+
+Portions of this software (the inline field parsing rules in `src/index/parse-content.ts`) are adapted from
+[Dataview](https://github.com/blacksmithgu/obsidian-dataview), used under the following license:
+
+```
 MIT License
 
-Copyright (c) 2026 cferrugem
+Copyright (c) 2021 Michael Brenan
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +27,4 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```

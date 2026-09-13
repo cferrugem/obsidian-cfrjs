@@ -6,8 +6,10 @@ import { DataArray } from "../api/data-array";
 import { CDate, extractDate } from "../values/date";
 import { Link } from "../values/link";
 import { canonicalizeKey, parseFrontmatterValue, parseInlineValue } from "../values/parse-value";
-import { Literal, ROW_BASE } from "../values/types";
+import { createRow, isArray, Literal, ROW_BASE, Row } from "../values/types";
 import { ContentData, RawListItem } from "./parse-content";
+
+export type { Row };
 
 export interface PageEnv {
     resolveLinkPath(linkpath: string, origin: string): string | null;
@@ -32,8 +34,6 @@ export interface PageInput {
     aliases: string[];
     links: RawLink[];
 }
-
-export type Row = { [key: string]: any; [key: symbol]: any };
 
 /** Page that owns a list item (non-enumerable, not listed by Object.keys). */
 export const ITEM_PAGE: unique symbol = Symbol("cfrjs.page");
@@ -122,7 +122,7 @@ export class Page {
             }
         }
 
-        const fields: Row = Object.create(null);
+        const fields = createRow();
         finalizeFields(fieldMap, fields);
         this.fields = fields;
         this.day = this.findDay();
@@ -141,7 +141,7 @@ export class Page {
             const lower = key.toLowerCase();
             if (lower !== "date" && lower !== "day") continue;
             let v = this.fields[key];
-            if (Array.isArray(v)) v = v[0];
+            if (isArray(v)) v = v[0];
             if (v instanceof CDate) return v;
             if (v instanceof Link) {
                 const d = extractDate(v.path) ?? extractDate(v.display ?? "");
@@ -167,20 +167,18 @@ export class Page {
     /** Queryable page object. Built on demand and reused. */
     get row(): Row {
         if (this._row) return this._row;
-        const row: Row = Object.create(null);
+        const row = createRow();
         for (const key in this.fields) row[key] = this.fields[key];
         row.file = new FileMeta(this);
         return (this._row = row);
     }
 
     get lists(): DataArray<ListItemRow> {
-        if (!this._lists) this.buildLists();
-        return this._lists!;
+        return this._lists ?? this.buildLists().lists;
     }
 
     get tasks(): DataArray<ListItemRow> {
-        if (!this._tasks) this.buildLists();
-        return this._tasks!;
+        return this._tasks ?? this.buildLists().tasks;
     }
 
     /** Unresolved links that appear between the given lines. */
@@ -190,13 +188,13 @@ export class Page {
         return out;
     }
 
-    private buildLists(): void {
+    private buildLists(): { lists: DataArray<ListItemRow>; tasks: DataArray<ListItemRow> } {
         const raw = this.content?.lists ?? [];
         const lists = new DataArray<ListItemRow>();
         const tasks = new DataArray<ListItemRow>();
         this._lists = lists;
         this._tasks = tasks;
-        if (raw.length === 0) return;
+        if (raw.length === 0) return { lists, tasks };
 
         const row = this.row;
         const byLine = new Map<number, ListItemRow>();
@@ -224,6 +222,7 @@ export class Page {
                 cur = cur.parent !== undefined ? byLine.get(cur.parent) : undefined;
             }
         }
+        return { lists, tasks };
     }
 }
 
@@ -234,7 +233,8 @@ const OUTLINKS: unique symbol = Symbol("cfrjs.outlinks");
  * page fields are reached through ROW_BASE, without copies.
  */
 export class ListItemRow {
-    [key: string]: any;
+    [key: string]: unknown;
+    [key: symbol]: unknown;
     declare [ROW_BASE]: Row;
     declare [ITEM_PAGE]: Page;
     declare [OUTLINKS]: DataArray<Link> | undefined;
@@ -302,13 +302,16 @@ export class ListItemRow {
     private addFields(item: RawListItem, isTask: boolean): void {
         const map = new Map<string, Literal[]>();
         for (const [key, raw] of item.fields) addField(map, key, parseInlineValue(raw));
-        const own: Row = Object.create(null);
+        const own = createRow();
         finalizeFields(map, own);
         for (const key in own) if (!(key in this)) this[key] = own[key];
         if (!isTask) return;
 
-        const pick = (...keys: string[]) => {
-            for (const k of keys) if (own[k] !== undefined) return Array.isArray(own[k]) ? own[k][0] : own[k];
+        const pick = (...keys: string[]): unknown => {
+            for (const k of keys) {
+                const v = own[k];
+                if (v !== undefined) return isArray(v) ? v[0] : v;
+            }
             return undefined;
         };
         const created = pick("created", "ctime", "cday");
@@ -324,48 +327,58 @@ export class ListItemRow {
     }
 
     get outlinks(): DataArray<Link> {
-        let out = this[OUTLINKS];
-        if (out) return out;
+        const cached = this[OUTLINKS];
+        if (cached) return cached;
         const page = this[ITEM_PAGE];
-        out = new DataArray<Link>();
+        const out = new DataArray<Link>();
         for (const l of page.linksBetween(this.line, this.line + this.lineCount - 1)) {
             const resolved = page.env.resolveLinkPath(l.link.path, page.path);
             out.push(resolved ? l.link.withPath(resolved) : l.link);
         }
-        return (this[OUTLINKS] = out);
+        this[OUTLINKS] = out;
+        return out;
     }
+}
+
+interface FileMemo {
+    name?: string;
+    folder?: string;
+    link?: Link;
+    cday?: CDate;
+    mday?: CDate;
+    tags?: DataArray<string>;
+    etags?: DataArray<string>;
+    aliases?: DataArray<string>;
+    outlinks?: DataArray<Link>;
+    outlinksEpoch?: number;
 }
 
 /** `file.*` metadata with lazy, memoized getters. */
 export class FileMeta {
     private declare readonly _p: Page;
-    private declare readonly _m: Record<string, any>;
+    private declare readonly _m: FileMemo;
 
     constructor(page: Page) {
+        const memo: FileMemo = {};
         Object.defineProperty(this, "_p", { value: page });
-        Object.defineProperty(this, "_m", { value: Object.create(null) });
-    }
-
-    private memo<T>(key: string, fn: () => T): T {
-        const m = this._m;
-        return key in m ? m[key] : (m[key] = fn());
+        Object.defineProperty(this, "_m", { value: memo });
     }
 
     get path(): string {
         return this._p.path;
     }
     get name(): string {
-        return this.memo("name", () => this._p.name);
+        return (this._m.name ??= this._p.name);
     }
     get folder(): string {
-        return this.memo("folder", () => this._p.folder);
+        return (this._m.folder ??= this._p.folder);
     }
     get ext(): string {
         const dot = this._p.path.lastIndexOf(".");
         return dot >= 0 ? this._p.path.slice(dot + 1) : "";
     }
     get link(): Link {
-        return this.memo("link", () => Link.file(this._p.path));
+        return (this._m.link ??= Link.file(this._p.path));
     }
     get size(): number {
         return this._p.size;
@@ -374,13 +387,13 @@ export class FileMeta {
         return this._p.ctime;
     }
     get cday(): CDate {
-        return this.memo("cday", () => this._p.ctime.startOfDay());
+        return (this._m.cday ??= this._p.ctime.startOfDay());
     }
     get mtime(): CDate {
         return this._p.mtime;
     }
     get mday(): CDate {
-        return this.memo("mday", () => this._p.mtime.startOfDay());
+        return (this._m.mday ??= this._p.mtime.startOfDay());
     }
     get day(): CDate | null {
         return this._p.day;
@@ -389,13 +402,13 @@ export class FileMeta {
         return this._p.frontmatter;
     }
     get tags(): DataArray<string> {
-        return this.memo("tags", () => DataArray.wrap(this._p.fullTags));
+        return (this._m.tags ??= DataArray.wrap(this._p.fullTags));
     }
     get etags(): DataArray<string> {
-        return this.memo("etags", () => DataArray.wrap(this._p.etags));
+        return (this._m.etags ??= DataArray.wrap(this._p.etags));
     }
     get aliases(): DataArray<string> {
-        return this.memo("aliases", () => DataArray.wrap(this._p.aliases));
+        return (this._m.aliases ??= DataArray.wrap(this._p.aliases));
     }
     get lists(): DataArray<ListItemRow> {
         return this._p.lists;
@@ -407,7 +420,7 @@ export class FileMeta {
         const env = this._p.env;
         const epoch = env.linkEpoch();
         const m = this._m;
-        if (m.outlinksEpoch === epoch) return m.outlinks;
+        if (m.outlinks && m.outlinksEpoch === epoch) return m.outlinks;
         const seen = new Set<string>();
         const out = new DataArray<Link>();
         for (const { link } of this._p.input.links) {
@@ -419,7 +432,8 @@ export class FileMeta {
             out.push(final);
         }
         m.outlinksEpoch = epoch;
-        return (m.outlinks = out);
+        m.outlinks = out;
+        return out;
     }
     get inlinks(): DataArray<Link> {
         const out = new DataArray<Link>();

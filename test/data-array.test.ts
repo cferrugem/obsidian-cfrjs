@@ -54,6 +54,6 @@ describe("DataArray", () => {
 
     it("expands trees", () => {
         const tree = DataArray.wrap([{ id: 1, children: [{ id: 2, children: [{ id: 3 }] }] }]);
-        expect(tree.expand("children").map(t => t.id).array()).toEqual([1, 2, 3]);
+        expect(tree.expand("children").map(t => (t as { id: number }).id).array()).toEqual([1, 2, 3]);
     });
 });

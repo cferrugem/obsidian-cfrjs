@@ -1,7 +1,7 @@
 /** TABLE, LIST and TASK renderers with row reuse. */
 import { Component } from "obsidian";
-import { ITEM_PAGE } from "../index/page";
-import { valueKey } from "../values/types";
+import { ITEM_PAGE, Page } from "../index/page";
+import { isArray, isRecord, Row, truthy, valueKey, valueToString } from "../values/types";
 import { createKeyedState, KeyedState, renderKeyed, resetKeyed, rowComponent } from "./keyed";
 import { needsMarkdown, renderMarkdown, renderValue, RenderContext } from "./value";
 
@@ -51,7 +51,7 @@ export function renderTable(
     state: ResultState,
     owner: Component
 ): void {
-    const headerKey = "table" + headers.join("");
+    const headerKey = "table\u0001" + headers.join("\u0001");
     if (state.kind !== "table" || state.headerKey !== headerKey || !state.root?.isConnected) {
         resetKeyed(state.keyed, owner);
         container.empty();
@@ -78,7 +78,7 @@ export function renderTable(
         rows,
         keys,
         cells => {
-            const tr = document.createElement("tr");
+            const tr = createEl("tr");
             const rrc = rowContext(rc, rowComponent(state.keyed, owner, tr));
             for (const cell of cells) renderValue(tr.createEl("td"), cell, rrc, false);
             return tr;
@@ -109,7 +109,7 @@ export function renderList(container: HTMLElement, items: unknown[], rc: RenderC
         items,
         items.map(i => valueKey(i)),
         item => {
-            const li = document.createElement("li");
+            const li = createEl("li");
             renderValue(li, item, rowContext(rc, rowComponent(state.keyed, owner, li)), true);
             return li;
         },
@@ -124,50 +124,54 @@ export function renderList(container: HTMLElement, items: unknown[], rc: RenderC
 // TASK
 // ---------------------------------------------------------------------------
 
-export type TaskToggle = (item: Record<string, any>, checked: boolean) => Promise<void>;
+export type TaskToggle = (item: Row, checked: boolean) => Promise<void>;
 
 interface TaskGroup {
     key: unknown;
-    rows: Record<string, any>[];
+    rows: Row[];
 }
 
-function isGroup(row: any): row is TaskGroup {
-    return row && row.task === undefined && Array.isArray(row.rows) && "key" in row;
+function isGroup(row: unknown): row is TaskGroup {
+    return isRecord(row) && row.task === undefined && isArray(row.rows) && "key" in row;
 }
 
-function taskKey(item: Record<string, any>): string {
-    let key = `${item.path}:${item.line}:${item.status}:${item.text}`;
-    for (const child of item.children ?? []) key += "" + taskKey(child);
+function taskKey(item: Row): string {
+    let key = [item.path, item.line, item.status, item.text].map(valueToString).join(":");
+    if (isArray(item.children)) {
+        for (const child of item.children) if (isRecord(child)) key += "\u0001" + taskKey(child);
+    }
     return key;
 }
 
-function renderItem(parent: HTMLElement, item: Record<string, any>, rc: RenderContext, onToggle: TaskToggle, depth = 0): void {
-    const li = parent.createEl("li", { cls: item.task ? "task-list-item" : "cfr-list-item" });
-    if (item.task) {
-        li.setAttr("data-task", item.status);
-        if (item.checked) li.addClass("is-checked");
+function renderItem(parent: HTMLElement, item: Row, rc: RenderContext, onToggle: TaskToggle, depth = 0): void {
+    const isTask = truthy(item.task);
+    const li = parent.createEl("li", { cls: isTask ? "task-list-item" : "cfr-list-item" });
+    if (isTask) {
+        li.setAttr("data-task", valueToString(item.status));
+        if (truthy(item.checked)) li.addClass("is-checked");
         const box = li.createEl("input", { cls: "task-list-item-checkbox", type: "checkbox" });
-        box.checked = !!item.checked;
+        box.checked = truthy(item.checked);
         box.addEventListener("click", evt => {
             evt.stopPropagation();
             box.disabled = true;
-            onToggle(item, box.checked).finally(() => (box.disabled = false));
+            void onToggle(item, box.checked).finally(() => (box.disabled = false));
         });
     }
     const text = li.createSpan({ cls: "cfr-task-text" });
-    if (needsMarkdown(item.text)) void renderMarkdown(text, item.text, rc);
-    else text.setText(item.text);
+    const itemText = valueToString(item.text);
+    if (needsMarkdown(itemText)) void renderMarkdown(text, itemText, rc);
+    else text.setText(itemText);
 
-    const children: Record<string, any>[] = item.children ?? [];
+    const children = isArray(item.children) ? item.children.filter(isRecord) : [];
     if (children.length > 0 && depth < 20) {
         const ul = li.createEl("ul", { cls: "contains-task-list" });
         for (const child of children) renderItem(ul, child, rc, onToggle, depth + 1);
     }
 }
 
-function renderTaskRows(parent: HTMLElement, rows: Record<string, any>[], rc: RenderContext, onToggle: TaskToggle): void {
+function renderTaskRows(parent: HTMLElement, rows: Row[], rc: RenderContext, onToggle: TaskToggle): void {
     // Skip items that already appear as children of another item in the result.
-    const selected = new Set(rows.filter(r => !isGroup(r)).map(r => `${r.path}:${r.line}`));
+    const selected = new Set(rows.filter(r => !isGroup(r)).map(r => `${valueToString(r.path)}:${valueToString(r.line)}`));
     const ul = parent.createEl("ul", { cls: "contains-task-list" });
     for (const row of rows) {
         if (isGroup(row)) {
@@ -180,15 +184,18 @@ function renderTaskRows(parent: HTMLElement, rows: Record<string, any>[], rc: Re
     if (!ul.hasChildNodes()) ul.remove();
 }
 
-function hasSelectedAncestor(row: Record<string, any>, selected: Set<string>): boolean {
-    const byLine = new Map<number, Record<string, any>>();
-    for (const t of (row as any)[ITEM_PAGE]?.lists ?? []) byLine.set(t.line, t);
-    let parent = row.parent;
+function hasSelectedAncestor(row: Row, selected: Set<string>): boolean {
+    const byLine = new Map<number, Row>();
+    const page = row[ITEM_PAGE];
+    if (page instanceof Page) for (const t of page.lists) byLine.set(t.line, t);
+    const path = valueToString(row.path);
+    let parent = typeof row.parent === "number" ? row.parent : undefined;
     const guard = new Set<number>();
     while (parent !== undefined && !guard.has(parent)) {
         guard.add(parent);
-        if (selected.has(`${row.path}:${parent}`)) return true;
-        parent = byLine.get(parent)?.parent;
+        if (selected.has(`${path}:${parent}`)) return true;
+        const next = byLine.get(parent)?.parent;
+        parent = typeof next === "number" ? next : undefined;
     }
     return false;
 }
@@ -221,13 +228,13 @@ export function renderTasks(
     }
     if (state.count) state.count.setText(`${count} ${count === 1 ? "task" : "tasks"}`);
 
-    const keys = groups.map(g => valueKey(g.key) + "" + g.rows.map(r => (isGroup(r) ? valueKey(r.key) : taskKey(r))).join(""));
+    const keys = groups.map(g => valueKey(g.key) + "\u0002" + g.rows.map(r => (isGroup(r) ? valueKey(r.key) : taskKey(r))).join("\u0003"));
     renderKeyed(
         state.body!,
         groups,
         keys,
         group => {
-            const div = document.createElement("div");
+            const div = createDiv();
             const grc = rowContext(rc, rowComponent(state.keyed, owner, div));
             renderGroup(div, group, grc, onToggle);
             return div;

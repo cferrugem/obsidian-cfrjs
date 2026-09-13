@@ -13,7 +13,7 @@ export interface PageChange {
 export interface ChangeBatch {
     revision: number;
     /** Invalidates everything (index ready, manual refresh, settings). */
-    global: boolean;
+    allPages: boolean;
     starred: boolean;
     changes: PageChange[];
 }
@@ -59,7 +59,7 @@ function intersects(small: ReadonlySet<string>, large: ReadonlySet<string>): boo
 }
 
 export function isAffected(deps: DepSet, batch: ChangeBatch): boolean {
-    if (batch.global) return true;
+    if (batch.allPages) return true;
     if (batch.starred && deps.starred) return true;
 
     for (const c of batch.changes) {

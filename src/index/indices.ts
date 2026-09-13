@@ -1,6 +1,6 @@
 /** Bidirectional key <-> paths index, updated by diff (no set copies on reads). */
 
-export const EMPTY_SET: ReadonlySet<string> = Object.freeze(new Set<string>()) as ReadonlySet<string>;
+export const EMPTY_SET: ReadonlySet<string> = Object.freeze(new Set<string>());
 
 export class SetIndex {
     /** path -> keys */

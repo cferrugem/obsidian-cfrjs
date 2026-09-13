@@ -3,18 +3,8 @@ import { CDate } from "./date";
 import { CDuration } from "./duration";
 import { Link } from "./link";
 
-export type Literal =
-    | null
-    | boolean
-    | number
-    | string
-    | CDate
-    | CDuration
-    | Link
-    | Literal[]
-    | { [key: string]: Literal }
-    | ((...args: any[]) => any)
-    | object;
+/** Any value handled by the query language. */
+export type Literal = null | boolean | number | string | object;
 
 export type LType =
     | "null"
@@ -30,10 +20,15 @@ export type LType =
     | "function"
     | "html";
 
+/** Object with string and symbol keys: query rows, frontmatter objects, etc. */
+export type Row = { [key: string]: unknown; [key: symbol]: unknown };
+
+export type Callable = (...args: unknown[]) => unknown;
+
 export interface ListPairWidget {
     $widget: "listpair";
-    key: Literal;
-    value: Literal;
+    key: unknown;
+    value: unknown;
 }
 
 export interface ExternalLinkWidget {
@@ -53,6 +48,23 @@ const hasHTMLElement = typeof HTMLElement !== "undefined";
  */
 export const ROW_BASE: unique symbol = Symbol("cfrjs.base");
 
+export function isRecord(v: unknown): v is Row {
+    return typeof v === "object" && v !== null;
+}
+
+export function isArray(v: unknown): v is unknown[] {
+    return Array.isArray(v);
+}
+
+export function isCallable(v: unknown): v is Callable {
+    return typeof v === "function";
+}
+
+/** Creates an empty, prototype-less row. */
+export function createRow(): Row {
+    return Object.create(null) as Row;
+}
+
 export function typeOf(v: unknown): LType {
     if (v === null || v === undefined) return "null";
     switch (typeof v) {
@@ -65,17 +77,17 @@ export function typeOf(v: unknown): LType {
         case "function":
             return "function";
     }
-    if (Array.isArray(v)) return "array";
+    if (isArray(v)) return "array";
     if (v instanceof Link) return "link";
     if (v instanceof CDate) return "date";
     if (v instanceof CDuration) return "duration";
     if (hasHTMLElement && v instanceof HTMLElement) return "html";
-    if (typeof (v as any).$widget === "string") return "widget";
+    if (isWidget(v)) return "widget";
     return "object";
 }
 
 export function isWidget(v: unknown): v is Widget {
-    return !!v && typeof v === "object" && typeof (v as any).$widget === "string";
+    return isRecord(v) && typeof v.$widget === "string";
 }
 
 export function truthy(v: unknown): boolean {
@@ -90,10 +102,12 @@ export function truthy(v: unknown): boolean {
         case "function":
             return true;
     }
-    if (Array.isArray(v)) return v.length > 0;
+    if (isArray(v)) return v.length > 0;
     if (v instanceof CDate || v instanceof CDuration || v instanceof Link) return true;
     if (hasHTMLElement && v instanceof HTMLElement) return true;
-    for (const _ in v as object) return true;
+    if (isRecord(v)) {
+        for (const _ in v) return true;
+    }
     return false;
 }
 
@@ -116,12 +130,16 @@ export function valueToString(v: unknown, depth = 0): string {
             return v;
         case "number":
         case "boolean":
+        case "bigint":
             return String(v);
+        case "symbol":
+            return v.toString();
         case "function":
             return "<function>";
     }
+    if (!isRecord(v)) return "";
     if (depth > 6) return "...";
-    if (Array.isArray(v)) return v.map(x => valueToString(x, depth + 1)).join(", ");
+    if (isArray(v)) return v.map(x => valueToString(x, depth + 1)).join(", ");
     if (v instanceof CDate) return formatDate(v);
     if (v instanceof CDuration) return v.toHuman();
     if (v instanceof Link) return v.markdown();
@@ -130,9 +148,9 @@ export function valueToString(v: unknown, depth = 0): string {
         if (v.$widget === "listpair") return `${valueToString(v.key, depth + 1)}: ${valueToString(v.value, depth + 1)}`;
         return v.display ?? v.url;
     }
-    if (hasCustomToString(v)) return String(v);
-    const entries = Object.entries(v as object);
-    return "{ " + entries.map(([k, x]) => `${k}: ${valueToString(x, depth + 1)}`).join(", ") + " }";
+    const custom = customToString(v);
+    if (custom !== null) return custom;
+    return "{ " + Object.entries(v).map(([k, x]) => `${k}: ${valueToString(x, depth + 1)}`).join(", ") + " }";
 }
 
 /**
@@ -145,37 +163,38 @@ export function valueKey(v: unknown, depth = 0): string {
         case "string":
             return "s" + v;
         case "number":
-            return "#" + v;
+            return "#" + String(v);
         case "boolean":
             return v ? "T" : "F";
         case "function":
             return "f";
     }
+    if (!isRecord(v)) return "?";
     if (depth > 8) return "…";
-    if (Array.isArray(v)) {
+    if (isArray(v)) {
         let out = "[";
-        for (let i = 0; i < v.length; i++) out += (i ? "" : "") + valueKey(v[i], depth + 1);
+        for (let i = 0; i < v.length; i++) out += (i ? "\u0001" : "") + valueKey(v[i], depth + 1);
         return out + "]";
     }
     if (v instanceof Link) return `L${v.path}#${v.subpath ?? ""}|${v.display ?? ""}${v.embed ? "!" : ""}`;
     if (v instanceof CDate) return `D${v.ms}${v.hasTime ? "t" : ""}`;
     if (v instanceof CDuration) return `U${v.months}:${v.ms}`;
-    if (hasHTMLElement && v instanceof HTMLElement) return "H" + v.outerHTML.length;
-    if (hasCustomToString(v)) return "O" + String(v);
+    if (hasHTMLElement && v instanceof HTMLElement) return "H" + String(v.outerHTML.length);
+    const custom = customToString(v);
+    if (custom !== null) return "O" + custom;
     let out = "{";
-    for (const k in v as any) out += k + "=" + valueKey((v as any)[k], depth + 1) + "";
+    for (const k in v) out += k + "=" + valueKey(v[k], depth + 1) + "\u0002";
     return out + "}";
 }
 
 /** Class instances with their own toString (e.g. file) are displayed through it, not through their keys. */
-export function hasCustomToString(v: object): boolean {
-    const proto = Object.getPrototypeOf(v);
-    return (
-        proto !== Object.prototype &&
-        proto !== null &&
-        typeof (v as any).toString === "function" &&
-        (v as any).toString !== Object.prototype.toString
-    );
+export function customToString(v: object): string | null {
+    const proto: unknown = Object.getPrototypeOf(v);
+    if (proto === Object.prototype || proto === null) return null;
+    const toString: unknown = (v as { toString?: unknown }).toString;
+    if (typeof toString !== "function" || toString === Object.prototype.toString) return null;
+    const out: unknown = toString.call(v);
+    return typeof out === "string" ? out : null;
 }
 
 export function isNull(v: unknown): v is null | undefined {

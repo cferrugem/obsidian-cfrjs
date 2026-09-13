@@ -25,6 +25,7 @@ import { QueryError } from "../query/errors";
 import { QueryIndex, UNRESOLVED_PREFIX } from "../query/execute";
 import { Link } from "../values/link";
 import { canonicalizeKey, parseScalar } from "../values/parse-value";
+import { createRow } from "../values/types";
 import { EMPTY_SET, SetIndex } from "./indices";
 import { Page, PageEnv, PageInput, RawLink, Row } from "./page";
 import { ContentData, ParseMeta } from "./parse-content";
@@ -46,7 +47,7 @@ export interface IndexStats {
     workers: number;
 }
 
-const yieldToMain = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+const yieldToMain = () => new Promise<void>(resolve => window.setTimeout(resolve, 0));
 
 function isMarkdown(file: TAbstractFile): file is TFile {
     return file instanceof TFile && (file.extension === "md" || file.extension === "markdown");
@@ -80,10 +81,10 @@ export class VaultIndex extends Component implements QueryIndex, PageEnv {
     private readonly store: ContentStore;
     private readonly listeners = new Set<(batch: ChangeBatch) => void>();
     private pending: PageChange[] = [];
-    private flushTimer: ReturnType<typeof setTimeout> | null = null;
+    private flushTimer: number | null = null;
     private bulk = false;
     private parseQueue = new Map<string, TFile>();
-    private parseTimer: ReturnType<typeof setTimeout> | null = null;
+    private parseTimer: number | null = null;
     private linkCache = new Map<string, string | null>();
     private linkCacheEpoch = -1;
     private csvCache = new Map<string, { mtime: number; rows: Row[] }>();
@@ -101,8 +102,8 @@ export class VaultIndex extends Component implements QueryIndex, PageEnv {
     onunload(): void {
         this.pool.terminate();
         this.store.close();
-        if (this.flushTimer) clearTimeout(this.flushTimer);
-        if (this.parseTimer) clearTimeout(this.parseTimer);
+        if (this.flushTimer) window.clearTimeout(this.flushTimer);
+        if (this.parseTimer) window.clearTimeout(this.parseTimer);
         this.listeners.clear();
     }
 
@@ -119,18 +120,18 @@ export class VaultIndex extends Component implements QueryIndex, PageEnv {
         if (!this.ready) return;
         this.pending.push(change);
         if (this.flushTimer !== null) return;
-        this.flushTimer = setTimeout(() => {
+        this.flushTimer = window.setTimeout(() => {
             this.flushTimer = null;
             this.emit(false, false);
         }, this.bulk ? 750 : 30);
     }
 
-    private emit(global: boolean, starred: boolean): void {
+    private emit(allPages: boolean, starred: boolean): void {
         const changes = this.pending;
         this.pending = [];
-        if (!global && !starred && changes.length === 0) return;
+        if (!allPages && !starred && changes.length === 0) return;
         this.revision++;
-        const batch: ChangeBatch = { revision: this.revision, global, starred, changes };
+        const batch: ChangeBatch = { revision: this.revision, allPages, starred, changes };
         for (const listener of this.listeners) {
             try {
                 listener(batch);
@@ -245,7 +246,7 @@ export class VaultIndex extends Component implements QueryIndex, PageEnv {
             ctime: file.stat.ctime,
             mtime: file.stat.mtime,
             size: file.stat.size,
-            frontmatter: (meta.frontmatter as Record<string, unknown> | undefined) ?? null,
+            frontmatter: (meta.frontmatter) ?? null,
             tags: getAllTags(meta) ?? [],
             aliases: parseFrontMatterAliases(meta.frontmatter ?? null) ?? [],
             links,
@@ -317,7 +318,7 @@ export class VaultIndex extends Component implements QueryIndex, PageEnv {
             const batch = files.slice(i, i + BATCH_SIZE);
             const task = this.parseBatch(batch).catch(e => console.error("cfrjs: failed to process batch", e));
             inFlight.add(task);
-            task.finally(() => inFlight.delete(task));
+            void task.finally(() => inFlight.delete(task));
             if (inFlight.size >= maxInFlight) await Promise.race(inFlight);
         }
         await Promise.all(inFlight);
@@ -361,7 +362,7 @@ export class VaultIndex extends Component implements QueryIndex, PageEnv {
     private queueParse(file: TFile): void {
         this.parseQueue.set(file.path, file);
         if (this.parseTimer !== null) return;
-        this.parseTimer = setTimeout(() => {
+        this.parseTimer = window.setTimeout(() => {
             this.parseTimer = null;
             const files = [...this.parseQueue.values()];
             this.parseQueue.clear();
@@ -502,7 +503,7 @@ export class VaultIndex extends Component implements QueryIndex, PageEnv {
             this.linkCache.clear();
             this.linkCacheEpoch = this.epoch;
         }
-        const key = origin + " " + linktext;
+        const key = origin + "\u0000" + linktext;
         let result = this.linkCache.get(key);
         if (result === undefined) {
             result = this.app.metadataCache.getFirstLinkpathDest(getLinkpath(linktext), origin)?.path ?? null;
@@ -584,7 +585,7 @@ export class VaultIndex extends Component implements QueryIndex, PageEnv {
         const keys = header.map(h => h.trim());
         const canon = keys.map(k => canonicalizeKey(k));
         const rows: Row[] = data.map(cells => {
-            const row: Row = Object.create(null);
+            const row = createRow();
             for (let i = 0; i < keys.length; i++) {
                 const value = parseScalar(cells[i] ?? "");
                 row[keys[i]] = value;

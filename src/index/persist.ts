@@ -18,14 +18,14 @@ const STORE = "content";
 function request<T>(req: IDBRequest<T>): Promise<T> {
     return new Promise((resolve, reject) => {
         req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+        req.onerror = () => reject(req.error ?? new Error("IndexedDB request failed"));
     });
 }
 
 export class ContentStore {
     private db: IDBDatabase | null = null;
     private pending = new Map<string, CachedContent | null>();
-    private timer: ReturnType<typeof setTimeout> | null = null;
+    private timer: number | null = null;
 
     constructor(private readonly name: string, private readonly version: string) {}
 
@@ -38,7 +38,7 @@ export class ContentStore {
                     if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE, { keyPath: "path" });
                 };
                 req.onsuccess = () => resolve(req.result);
-                req.onerror = () => reject(req.error);
+                req.onerror = () => reject(req.error ?? new Error("Could not open the IndexedDB cache"));
             });
         } catch (e) {
             console.warn("cfrjs: persistent cache unavailable", e);
@@ -70,7 +70,7 @@ export class ContentStore {
 
     private schedule(): void {
         if (this.timer !== null || !this.db) return;
-        this.timer = setTimeout(() => {
+        this.timer = window.setTimeout(() => {
             this.timer = null;
             void this.flush();
         }, 2000);
@@ -89,8 +89,8 @@ export class ContentStore {
                     else store.delete(path);
                 }
                 tx.oncomplete = () => resolve();
-                tx.onerror = () => reject(tx.error);
-                tx.onabort = () => reject(tx.error);
+                tx.onerror = () => reject(tx.error ?? new Error("IndexedDB transaction failed"));
+                tx.onabort = () => reject(tx.error ?? new Error("IndexedDB transaction was aborted"));
             });
         } catch (e) {
             console.warn("cfrjs: failed to write the cache", e);
@@ -121,7 +121,7 @@ export class ContentStore {
     }
 
     close(): void {
-        if (this.timer !== null) clearTimeout(this.timer);
+        if (this.timer !== null) window.clearTimeout(this.timer);
         this.timer = null;
         void this.flush().finally(() => this.db?.close());
     }

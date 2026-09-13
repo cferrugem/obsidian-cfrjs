@@ -171,7 +171,7 @@ export class CDuration {
         }
         vals.S = ms;
 
-        return fmt.replace(/'([^']*)'|y+|M+|w+|d+|h+|m+|s+|S+/g, (match, literal) => {
+        return fmt.replace(/'([^']*)'|y+|M+|w+|d+|h+|m+|s+|S+/g, (match: string, literal: string | undefined): string => {
             if (literal !== undefined) return literal;
             const v = vals[match[0]] ?? 0;
             return String(v).padStart(match.length, "0");

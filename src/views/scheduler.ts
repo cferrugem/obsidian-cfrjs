@@ -16,7 +16,7 @@ export interface Refreshable {
 export class Scheduler {
     private readonly views = new Set<Refreshable>();
     private readonly dirty = new Set<Refreshable>();
-    private timer: ReturnType<typeof setTimeout> | null = null;
+    private timer: number | null = null;
     private observer: IntersectionObserver | null = null;
     private readonly observed = new WeakMap<Element, Refreshable>();
     /** Diagnostic counters. */
@@ -53,14 +53,14 @@ export class Scheduler {
 
     onBatch(batch: ChangeBatch): void {
         this.stats.batches++;
-        if (!batch.global && !this.settings.refreshEnabled) return;
+        if (!batch.allPages && !this.settings.refreshEnabled) return;
         for (const view of this.views) {
             if (isAffected(view.deps, batch)) this.dirty.add(view);
             else this.stats.skipped++;
         }
         if (this.dirty.size === 0) return;
-        if (this.timer !== null) clearTimeout(this.timer);
-        this.timer = setTimeout(() => this.flush(), batch.global ? 0 : this.settings.refreshDelay);
+        if (this.timer !== null) window.clearTimeout(this.timer);
+        this.timer = window.setTimeout(() => this.flush(), batch.allPages ? 0 : this.settings.refreshDelay);
     }
 
     private flush(): void {
@@ -79,7 +79,7 @@ export class Scheduler {
     }
 
     destroy(): void {
-        if (this.timer !== null) clearTimeout(this.timer);
+        if (this.timer !== null) window.clearTimeout(this.timer);
         this.observer?.disconnect();
         this.views.clear();
         this.dirty.clear();

@@ -1,6 +1,6 @@
 {
   "name": "cfrjs",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Fast Obsidian vault queries in the style of Dataview, built for performance.",
   "main": "main.js",
   "type": "module",
@@ -8,6 +8,7 @@
     "dev": "node esbuild.config.mjs",
     "build": "tsc --noEmit && node esbuild.config.mjs production",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
     "test": "vitest run",
     "bench": "vitest bench --run",
     "gen-vault": "node scripts/gen-vault.mjs",
@@ -23,10 +24,19 @@
   "license": "MIT",
   "devDependencies": {
     "@codemirror/language": "^6.10.0",
+    "@eslint/js": "^9.39.5",
+    "@eslint/json": "^0.14.0",
     "@types/node": "^20.11.0",
     "esbuild": "^0.21.5",
+    "eslint": "^9.39.5",
+    "eslint-plugin-obsidianmd": "^0.4.2",
     "obsidian": "^1.5.7",
     "typescript": "^5.4.5",
+    "typescript-eslint": "^8.70.0",
     "vitest": "^1.6.0"
+  },
+  "dependencies": {
+    "@codemirror/state": "6.5.0",
+    "@codemirror/view": "6.38.6"
   }
 }
