@@ -1,0 +1,32 @@
+{
+  "name": "cfrjs",
+  "version": "0.1.0",
+  "description": "Fast Obsidian vault queries in the style of Dataview, built for performance.",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc --noEmit && node esbuild.config.mjs production",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "bench": "vitest bench --run",
+    "gen-vault": "node scripts/gen-vault.mjs",
+    "version": "node scripts/version-bump.mjs && git add manifest.json versions.json"
+  },
+  "author": "cferrugem",
+  "keywords": [
+    "obsidian",
+    "dataview",
+    "query",
+    "performance"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@codemirror/language": "^6.10.0",
+    "@types/node": "^20.11.0",
+    "esbuild": "^0.21.5",
+    "obsidian": "^1.5.7",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}

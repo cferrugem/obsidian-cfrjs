@@ -1,0 +1,10 @@
+{
+  "id": "cfrjs",
+  "name": "CFR JS",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "Fast vault queries (TABLE/LIST/TASK + JavaScript API) in the style of Dataview, built for performance.",
+  "author": "cferrugem",
+  "authorUrl": "https://github.com/cferrugem",
+  "isDesktopOnly": false
+}

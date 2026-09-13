@@ -1,0 +1,90 @@
+.cfr-view {
+    overflow-x: auto;
+}
+
+.cfr-table-wrapper {
+    overflow-x: auto;
+}
+
+table.cfr-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table.cfr-table th {
+    text-align: left;
+    white-space: nowrap;
+}
+
+table.cfr-table td > ul.cfr-list {
+    margin: 0;
+    padding-left: 1.2em;
+}
+
+.cfr-count {
+    margin-left: 0.4em;
+    padding: 0 0.4em;
+    border-radius: var(--radius-s, 4px);
+    background: var(--background-modifier-hover);
+    color: var(--text-muted);
+    font-size: var(--font-smallest, 0.75em);
+    font-weight: normal;
+}
+
+/* Themes apply paragraph margins to lists; inside a block that becomes a large gap. */
+ul.cfr-list-view {
+    margin-block: 0.25em;
+}
+
+.cfr-task-count {
+    display: inline-block;
+    margin: 0 0 0.4em 0;
+}
+
+.cfr-task-group-title {
+    margin: 0.6em 0 0.2em;
+}
+
+.cfr-task-view ul.contains-task-list {
+    margin-top: 0;
+}
+
+.cfr-empty {
+    padding: 0.5em 0.75em;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.cfr-error {
+    color: var(--text-error);
+    background: var(--background-secondary);
+    padding: 0.6em 0.8em;
+    border-radius: var(--radius-s, 4px);
+    white-space: pre-wrap;
+}
+
+.cfr-error-inline {
+    color: var(--text-error);
+}
+
+.cfr-timings {
+    margin-top: 0.25em;
+    color: var(--text-faint);
+    font-size: var(--font-smallest, 0.75em);
+    text-align: right;
+}
+
+.cfr-js-output {
+    position: relative;
+}
+
+/* JavaScript output being rebuilt: keeps its layout but stays invisible until finished. */
+.cfr-js-pending {
+    position: absolute;
+    visibility: hidden;
+    inset: 0;
+}
+
+.cfr-inline-lp {
+    cursor: text;
+}
