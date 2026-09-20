@@ -88,3 +88,13 @@ ul.cfr-list-view {
 .cfr-inline-lp {
     cursor: text;
 }
+
+/* Inline code inside setting descriptions: Obsidian does not style <code> there. */
+.setting-item-description code.cfr-setting-code {
+    padding: 0.1em 0.35em;
+    border-radius: var(--radius-s, 4px);
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+    font-size: var(--font-smaller, 0.85em);
+    white-space: nowrap;
+}

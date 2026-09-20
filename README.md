@@ -1,6 +1,6 @@
 # CFR Js
 
-An Obsidian plugin inspired by [Dataview](https://github.com/blacksmithgu/obsidian-dataview), written from scratch with a focus on **performance**: `TABLE` / `LIST` / `TASK` queries, a JavaScript API, inline queries, inline fields, task toggling from views, and CSV sources.
+Query your vault from inside your notes. `TABLE` / `LIST` / `TASK` blocks, inline expressions, a JavaScript API, inline fields, task toggling straight from a result, and CSV sources — with [Dataview](https://github.com/blacksmithgu/obsidian-dataview)-compatible syntax, written from scratch with a focus on **performance** on large vaults.
 
 > cfrjs is an independent project. It is not affiliated with or endorsed by Dataview or its author.
 
@@ -81,6 +81,19 @@ Other plugins can use `window.CfrJsAPI` (`pages`, `page`, `query`, `stats`).
 - `` `= this.status` `` — expression evaluated in Reading view and Live Preview.
 - `` `$= cfr.pages("#project").length` `` — inline JavaScript.
 
+## Settings
+
+*Settings → Community plugins → CFR Js.* Options that only apply at load time show a **Reload now** button once you change them.
+
+| Group | What it covers |
+| --- | --- |
+| **Code blocks** | The `cfr` and `cfrjs` block keywords, reading `dataview` / `dataviewjs` blocks during a migration, and the switch that allows JavaScript to run at all |
+| **Inline queries** | Turning inline queries and inline JavaScript on, their `=` and `$=` prefixes, and whether results also render in Live Preview |
+| **Results** | Table column headings, the text used for empty values, date formats (with a live preview), the result count, empty-result warnings and per-block timings |
+| **Performance** | Automatic refresh and its delay, how many rows are drawn per chunk, and the number of indexing workers |
+| **Tasks** | Whether checking a task records the completion date, as a ✅ emoji or as an inline field |
+| **Index** | Live index statistics, plus **Refresh all views** and **Rebuild index** buttons |
+
 ## Commands
 
 - **Refresh all views**
@@ -111,7 +124,7 @@ Other plugins can use `window.CfrJsAPI` (`pages`, `page`, `query`, `stats`).
 
 ## Differences from Dataview
 
-- Block keywords: `cfr` and `cfrjs` (enable *Accept dataview/dataviewjs blocks* to migrate without editing notes, with Dataview disabled).
+- Block keywords: `cfr` and `cfrjs` (enable *Also read dataview blocks* to migrate without editing notes, with Dataview disabled).
 - Dates are `CDate` (not Luxon). Common methods exist: `year`, `month`, `day`, `weekday`, `toFormat()`, `toISODate()`, `toMillis()`, `plus()`, `minus()`, `startOf()`, `endOf()`. `dv.luxon` is not available.
 - `DataArray.sort(key)` returns a new array; `sort((a, b) => ...)` with two arguments keeps the native (in-place) behavior.
 - Page objects are shared between queries to avoid copies: **do not mutate them** in scripts (create new objects instead).
@@ -119,7 +132,7 @@ Other plugins can use `window.CfrJsAPI` (`pages`, `page`, `query`, `stats`).
 
 ## Security
 
-`cfrjs` code blocks and inline `$=` expressions run **JavaScript written in your notes** with the same permissions as Obsidian itself (they can read and modify files in your vault). Only open vaults and notes you trust. You can turn JavaScript off under *Settings → CFR Js → Enable JavaScript* and *Enable inline JavaScript*; `cfr` queries and inline `=` expressions never execute arbitrary code.
+`cfrjs` code blocks and inline `$=` expressions run **JavaScript written in your notes** with the same permissions as Obsidian itself (they can read and modify files in your vault). Only open vaults and notes you trust. You can turn JavaScript off under *Settings → CFR Js → Code blocks → Run JavaScript blocks* and *Inline queries → Inline JavaScript*; `cfr` queries and inline `=` expressions never execute arbitrary code.
 
 ## Mobile
 
@@ -145,4 +158,4 @@ Its query language, API names and field names follow Dataview's conventions so e
 node scripts/gen-vault.mjs ./test-vault 10000
 ```
 
-Open `test-vault` as a vault, install the plugin and use **Show index statistics** and the **Show timings** option.
+Open `test-vault` as a vault, install the plugin, then read the status line under *Settings → CFR Js → Index* (or run **Show index statistics**) and turn on **Show query timings**.

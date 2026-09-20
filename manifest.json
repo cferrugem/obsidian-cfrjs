@@ -3,7 +3,7 @@
   "name": "CFR Js",
   "version": "0.1.1",
   "minAppVersion": "1.4.0",
-  "description": "Fast vault queries (TABLE/LIST/TASK + JavaScript API) in the style of Dataview, built for performance.",
+  "description": "Query your vault from inside your notes: TABLE, LIST and TASK blocks, inline expressions and a JavaScript API. Dataview-compatible syntax, rewritten from scratch for speed on large vaults.",
   "author": "cferrugem",
   "authorUrl": "https://github.com/cferrugem",
   "isDesktopOnly": false

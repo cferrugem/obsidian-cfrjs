@@ -18,7 +18,11 @@ export interface BookmarksInstance {
 
 interface AppInternals {
     appId?: string;
-    plugins?: { enabledPlugins?: Set<string> };
+    plugins?: {
+        enabledPlugins?: Set<string>;
+        disablePlugin?(id: string): Promise<void>;
+        enablePlugin?(id: string): Promise<void>;
+    };
     internalPlugins?: { plugins?: { bookmarks?: { instance?: BookmarksInstance } } };
 }
 
@@ -39,4 +43,22 @@ export function isCommunityPluginEnabled(app: App, id: string): boolean {
 /** The core Bookmarks plugin instance, if available. */
 export function getBookmarks(app: App): BookmarksInstance | null {
     return internals(app).internalPlugins?.plugins?.bookmarks?.instance ?? null;
+}
+
+/**
+ * Disables and re-enables the plugin so load-time registrations (code blocks, editor
+ * extensions, workers) are rebuilt. Returns false when the internals are unavailable,
+ * so the caller can ask the user to toggle the plugin by hand instead.
+ */
+export async function reloadPlugin(app: App, id: string): Promise<boolean> {
+    const plugins = internals(app).plugins;
+    if (!plugins?.disablePlugin || !plugins.enablePlugin) return false;
+    try {
+        await plugins.disablePlugin(id);
+        await plugins.enablePlugin(id);
+        return true;
+    } catch (e) {
+        console.error(`cfrjs: could not reload the plugin`, e);
+        return false;
+    }
 }
