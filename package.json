@@ -1,6 +1,6 @@
 {
   "name": "cfrjs",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Query your vault from inside your notes: TABLE, LIST and TASK blocks, inline expressions and a JavaScript API. Dataview-compatible syntax, rewritten from scratch for speed on large vaults.",
   "main": "main.js",
   "type": "module",
